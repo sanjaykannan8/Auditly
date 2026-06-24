@@ -38,10 +38,29 @@ function contextLine(a: Action): string {
   }
 }
 
-const priorityDot: Record<string, string> = {
-  HIGH: 'bg-red-500',
-  MEDIUM: 'bg-amber-500',
-  LOW: 'bg-green-500',
+const urgencyBadge: Record<string, { bg: string; icon: React.ReactNode }> = {
+  overdue: { bg: 'bg-red-50', icon: <ClockGlyph color="#dc2626" /> },
+  submitted: { bg: 'bg-purple-50', icon: <EyeGlyph color="#7e22ce" /> },
+  rejected: { bg: 'bg-red-50', icon: <ClockGlyph color="#dc2626" /> },
+  in_progress: { bg: 'bg-blue-50', icon: <ClockGlyph color="#2563eb" /> },
+}
+
+function ClockGlyph({ color }: { color: string }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" />
+      <path d="M12 7V12L15.5 14" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function EyeGlyph({ color }: { color: string }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <path d="M2 12C2 12 5.5 5.5 12 5.5C18.5 5.5 22 12 22 12C22 12 18.5 18.5 12 18.5C5.5 18.5 2 12 2 12Z" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="2.8" stroke={color} strokeWidth="1.8" />
+    </svg>
+  )
 }
 
 export default function PriorityActions({
@@ -81,9 +100,12 @@ export default function PriorityActions({
       {actions.map((a) => {
         const key = `${a.regulation_id}-${a.map_code}`
         const isReview = a.status === 'submitted'
+        const badge = urgencyBadge[a.status] ?? { bg: 'bg-gray-100', icon: <ClockGlyph color="#9ca3af" /> }
         return (
-          <div key={key} className="flex items-center gap-4 px-6 py-4">
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${priorityDot[a.priority ?? ''] ?? 'bg-gray-300'}`} />
+          <div key={key} className="flex items-center gap-3.5 px-6 py-4 hover:bg-gray-50/60 transition-colors">
+            <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${badge.bg}`}>
+              {badge.icon}
+            </span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">{a.title}</p>
               <p className="text-xs text-gray-500 mt-0.5">{contextLine(a)}</p>
@@ -92,7 +114,7 @@ export default function PriorityActions({
               {isReview ? (
                 <Link
                   href={`/dashboard/maps/${a.regulation_id}/${a.map_code}`}
-                  className="text-xs font-semibold text-white bg-[#ff5d03] hover:bg-[#e04f02] px-3 py-1.5 rounded-lg transition-colors"
+                  className="text-xs font-semibold text-white bg-[#ff5d03] hover:bg-[#e04f02] active:scale-[0.97] px-3 py-1.5 rounded-lg transition-all"
                 >
                   Review submission
                 </Link>
@@ -101,7 +123,7 @@ export default function PriorityActions({
                   <button
                     onClick={() => remind(a)}
                     disabled={busy === key || reminded[key]}
-                    className="text-xs font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                    className="text-xs font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 active:scale-[0.97] px-3 py-1.5 rounded-lg transition-all disabled:opacity-60 disabled:active:scale-100"
                   >
                     {reminded[key] ? 'Reminded ✓' : busy === key ? 'Sending…' : `Remind ${a.department.split(' ')[0]}`}
                   </button>

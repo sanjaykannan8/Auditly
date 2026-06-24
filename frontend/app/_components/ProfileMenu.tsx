@@ -1,12 +1,13 @@
 'use client'
 
 import { useAuth } from '@/lib/auth-client'
-import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import ProfileModal from './ProfileModal'
 
 export default function ProfileMenu() {
   const { user, logout } = useAuth()
   const [open, setOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -39,13 +40,12 @@ export default function ProfileMenu() {
             <p className="text-sm font-semibold text-gray-900 truncate">{user?.username ?? 'Account'}</p>
             <p className="text-xs text-gray-400 truncate">{user?.email}</p>
           </div>
-          <Link
-            href="/profile"
-            onClick={() => setOpen(false)}
-            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          <button
+            onClick={() => { setOpen(false); setProfileOpen(true) }}
+            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
             Profile settings
-          </Link>
+          </button>
           <button
             onClick={() => { setOpen(false); logout() }}
             className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -54,6 +54,8 @@ export default function ProfileMenu() {
           </button>
         </div>
       )}
+
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
     </div>
   )
 }

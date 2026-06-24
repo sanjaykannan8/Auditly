@@ -51,18 +51,15 @@ export default function StatusSelect({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-400">Status</span>
-      <select
-        value={status}
-        disabled={saving}
-        onChange={(e) => change(e.target.value)}
-        className="text-xs font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#ff5d03]/20 disabled:opacity-60"
-      >
-        {STATUSES.map((s) => (
-          <option key={s} value={s}>{LABEL[s]}</option>
-        ))}
-      </select>
-    </div>
+    <select
+      value={status}
+      disabled={saving}
+      onChange={(e) => change(e.target.value)}
+      className="w-full text-sm font-medium border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#ff5d03]/20 disabled:opacity-60"
+    >
+      {STATUSES.map((s) => (
+        <option key={s} value={s}>{LABEL[s]}</option>
+      ))}
+    </select>
   )
 }
