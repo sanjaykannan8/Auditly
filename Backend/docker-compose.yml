@@ -1,9 +1,0 @@
-# DEPRECATED — the full local stack now lives in the repo-root docker-compose.yml
-# (postgres, mysql, mongodb, rabbitmq, scraper, relay).
-#
-# Run it from the project root instead:
-#   cd ..
-#   docker compose down -v && docker compose up -d --build
-#
-# This file is intentionally left empty to avoid starting a second, conflicting
-# Postgres on port 5400.

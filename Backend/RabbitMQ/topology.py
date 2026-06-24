@@ -1,118 +1,87 @@
 """
-topology.py — Run once per environment to declare the Auditly RabbitMQ topology.
+Declare the Auditly RabbitMQ topology (idempotent). Run as a one-shot at stack startup.
 
-Usage:
-    CLOUDAMQP_URL="amqps://user:pass@hawk.rmq.cloudamqp.com/vhost" python topology.py
+    regulations (topic)
+        └─ binding regulation.#
+               └─ compliance.agent (durable, 24h TTL, DLX → dlq)
+                      ▼ on nack / TTL expiry
+                 regulations.dlx (direct)
+                      └─ compliance.agent.dlq (durable)
 
-Topology overview:
-    regulations (topic exchange)
-        └─ binding: regulation.#
-               └─ compliance.agent  (durable, 24 h TTL)
-                      │  on nack / TTL expiry
-                      ▼
-                 regulations.dlx (direct exchange)
-                      └─ compliance.agent.dlq  (durable)
+Ported from Backend/RabbitMQ/topology.py. Uses CLOUDAMQP_URL (amqp:// for local).
 """
+
+from __future__ import annotations
 
 import logging
 import os
 import sys
+import time
 
 import pika
 from dotenv import load_dotenv
 
 load_dotenv()
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-log = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s [topology] %(message)s", datefmt="%H:%M:%S")
+log = logging.getLogger("topology")
 
 EXCHANGE_MAIN = "regulations"
-EXCHANGE_DLX  = "regulations.dlx"
-
-QUEUE_MAIN    = "compliance.agent"
-QUEUE_DLQ     = "compliance.agent.dlq"
-
-ROUTING_KEY_MAIN    = "regulation.#"   # wildcard — catches all regulation.*.* keys
-ROUTING_KEY_DLQ     = "compliance.agent.dlq"
-
-MESSAGE_TTL_MS = 86_400_000   # 24 hours
+EXCHANGE_DLX = "regulations.dlx"
+QUEUE_MAIN = "compliance.agent"
+QUEUE_DLQ = "compliance.agent.dlq"
+ROUTING_KEY_MAIN = "regulation.#"
+ROUTING_KEY_DLQ = "compliance.agent.dlq"
+MESSAGE_TTL_MS = 86_400_000  # 24h
 
 
-def declare_topology(channel: pika.adapters.blocking_connection.BlockingChannel) -> None:
-    # 1. Dead-letter exchange — must be declared before the main queue references it
-    channel.exchange_declare(
-        exchange=EXCHANGE_DLX,
-        exchange_type="direct",
-        durable=True,
-    )
-    log.info("Exchange declared: %s (direct)", EXCHANGE_DLX)
+def declare(channel) -> None:
+    channel.exchange_declare(exchange=EXCHANGE_DLX, exchange_type="direct", durable=True)
+    channel.exchange_declare(exchange=EXCHANGE_MAIN, exchange_type="topic", durable=True)
 
-    # 2. Main topic exchange
-    channel.exchange_declare(
-        exchange=EXCHANGE_MAIN,
-        exchange_type="topic",
-        durable=True,
-    )
-    log.info("Exchange declared: %s (topic)", EXCHANGE_MAIN)
-
-    # 3. Dead-letter queue
     channel.queue_declare(queue=QUEUE_DLQ, durable=True)
-    channel.queue_bind(
-        queue=QUEUE_DLQ,
-        exchange=EXCHANGE_DLX,
-        routing_key=ROUTING_KEY_DLQ,
-    )
-    log.info("Queue declared and bound: %s → %s", QUEUE_DLQ, EXCHANGE_DLX)
+    channel.queue_bind(queue=QUEUE_DLQ, exchange=EXCHANGE_DLX, routing_key=ROUTING_KEY_DLQ)
 
-    # 4. Main processing queue with DLX config and TTL
     channel.queue_declare(
         queue=QUEUE_MAIN,
         durable=True,
         arguments={
-            "x-dead-letter-exchange":     EXCHANGE_DLX,
-            "x-dead-letter-routing-key":  ROUTING_KEY_DLQ,
-            "x-message-ttl":              MESSAGE_TTL_MS,
+            "x-dead-letter-exchange": EXCHANGE_DLX,
+            "x-dead-letter-routing-key": ROUTING_KEY_DLQ,
+            "x-message-ttl": MESSAGE_TTL_MS,
         },
     )
-    channel.queue_bind(
-        queue=QUEUE_MAIN,
-        exchange=EXCHANGE_MAIN,
-        routing_key=ROUTING_KEY_MAIN,
-    )
-    log.info("Queue declared and bound: %s → %s (key=%s)", QUEUE_MAIN, EXCHANGE_MAIN, ROUTING_KEY_MAIN)
+    channel.queue_bind(queue=QUEUE_MAIN, exchange=EXCHANGE_MAIN, routing_key=ROUTING_KEY_MAIN)
+    log.info("Topology declared: %s (topic), %s (dlx), %s, %s", EXCHANGE_MAIN, EXCHANGE_DLX, QUEUE_MAIN, QUEUE_DLQ)
 
 
 def main() -> None:
     url = os.environ.get("CLOUDAMQP_URL")
     if not url:
-        log.error("CLOUDAMQP_URL is not set. Export it or add it to .env")
+        log.error("CLOUDAMQP_URL is not set")
         sys.exit(1)
 
-    log.info("Connecting to CloudAMQP...")
-    params = pika.URLParameters(url)
-    params.socket_timeout = 10
+    # RabbitMQ may still be warming up — retry the connection a few times.
+    last_exc: Exception | None = None
+    for attempt in range(1, 31):
+        try:
+            params = pika.URLParameters(url)
+            params.socket_timeout = 10
+            connection = pika.BlockingConnection(params)
+            channel = connection.channel()
+            try:
+                declare(channel)
+            finally:
+                connection.close()
+            log.info("Topology set up successfully.")
+            return
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            log.warning("RabbitMQ not ready (attempt %d/30): %s", attempt, exc)
+            time.sleep(2)
 
-    connection = pika.BlockingConnection(params)
-    channel = connection.channel()
-
-    try:
-        declare_topology(channel)
-    finally:
-        connection.close()
-
-    log.info("Topology set up successfully.")
-    log.info("  Exchange : %s (topic)", EXCHANGE_MAIN)
-    log.info("  Exchange : %s (direct, DLX)", EXCHANGE_DLX)
-    log.info("  Queue    : %s  →  key '%s'", QUEUE_MAIN, ROUTING_KEY_MAIN)
-    log.info("  DLQ      : %s  →  %s", QUEUE_DLQ, EXCHANGE_DLX)
+    log.error("Could not declare topology: %s", last_exc)
+    sys.exit(1)
 
 
 if __name__ == "__main__":
