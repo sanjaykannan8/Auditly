@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { gsap } from '@/lib/gsap'
 
 type Action = {
   regulation_id: string
@@ -72,6 +73,32 @@ export default function PriorityActions({
 }) {
   const [reminded, setReminded] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    const rows = el.querySelectorAll('[data-action-row]')
+    if (!rows.length) return
+
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        rows,
+        { opacity: 0, x: 14 },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.35,
+          ease: 'power2.out',
+          stagger: 0.055,
+          delay: 0.35,
+          clearProps: 'all',
+        },
+      )
+    }, el)
+
+    return () => ctx.revert()
+  }, [actions.length])
 
   async function remind(a: Action) {
     const key = `${a.regulation_id}-${a.map_code}`
@@ -96,13 +123,13 @@ export default function PriorityActions({
   }
 
   return (
-    <div className="divide-y divide-gray-50">
+    <div ref={listRef} className="divide-y divide-gray-50">
       {actions.map((a) => {
         const key = `${a.regulation_id}-${a.map_code}`
         const isReview = a.status === 'submitted'
         const badge = urgencyBadge[a.status] ?? { bg: 'bg-gray-100', icon: <ClockGlyph color="#9ca3af" /> }
         return (
-          <div key={key} className="flex items-center gap-3.5 px-6 py-4 hover:bg-gray-50/60 transition-colors">
+          <div data-action-row key={key} className="flex items-center gap-3.5 px-6 py-4 hover:bg-gray-50/60 transition-colors">
             <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${badge.bg}`}>
               {badge.icon}
             </span>

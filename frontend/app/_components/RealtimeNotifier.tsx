@@ -3,6 +3,7 @@
 import { useAuth } from '@/lib/auth-client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
+import { gsap } from '@/lib/gsap'
 
 type Notice = { title: string; count: number }
 
@@ -74,7 +75,36 @@ export default function RealtimeNotifier({
   if (!notice) return null
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-80 bg-white border border-gray-200 rounded-xl shadow-lg p-4 animate-[fadeIn_0.2s_ease-out]">
+    <ToastCard notice={notice} onReload={reload} onDismiss={() => setNotice(null)} />
+  )
+}
+
+function ToastCard({
+  notice,
+  onReload,
+  onDismiss,
+}: {
+  notice: Notice
+  onReload: () => void
+  onDismiss: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    gsap.fromTo(
+      el,
+      { opacity: 0, y: 24, scale: 0.96 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: 'power2.out' },
+    )
+  }, [])
+
+  return (
+    <div
+      ref={ref}
+      className="fixed bottom-6 right-6 z-50 w-80 bg-white border border-gray-200 rounded-xl shadow-lg p-4"
+    >
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 rounded-lg bg-[#ff5d03]/10 flex items-center justify-center flex-shrink-0">
           <span className="w-2 h-2 rounded-full bg-[#ff5d03] animate-pulse" />
@@ -87,13 +117,13 @@ export default function RealtimeNotifier({
           </p>
           <div className="flex items-center gap-2 mt-3">
             <button
-              onClick={reload}
+              onClick={onReload}
               className="text-xs font-semibold text-white bg-[#ff5d03] hover:bg-[#e04f02] px-3 py-1.5 rounded-lg transition-colors"
             >
               Reload to view
             </button>
             <button
-              onClick={() => setNotice(null)}
+              onClick={onDismiss}
               className="text-xs font-medium text-gray-400 hover:text-gray-600 px-2 py-1.5"
             >
               Dismiss

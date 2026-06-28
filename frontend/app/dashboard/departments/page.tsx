@@ -3,6 +3,7 @@ import { friendlyDate } from '@/lib/labels'
 import AddDepartment from './_components/AddDepartment'
 import InviteButton from './_components/InviteButton'
 import RemindButton from './_components/RemindButton'
+import PageTransition from '@/app/_components/PageTransition'
 
 async function getDepartments(token: string) {
   const res = await fetch(
@@ -51,6 +52,7 @@ export default async function DepartmentsPage() {
   const assignedDepts = departments.filter((d: Record<string, string>) => d.head_user_id).length
 
   return (
+    <PageTransition>
     <div className="p-8">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
@@ -134,6 +136,7 @@ export default async function DepartmentsPage() {
         </div>
       )}
     </div>
+    </PageTransition>
   )
 }
 

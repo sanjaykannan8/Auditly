@@ -1,6 +1,8 @@
 import { getServerToken } from '@/lib/auth-server'
 import { friendlyDate } from '@/lib/labels'
 import Link from 'next/link'
+import PageTransition from '@/app/_components/PageTransition'
+import UploadRegulationButton from './_components/UploadRegulationButton'
 
 async function getRegulations(token: string, page: number) {
   const res = await fetch(
@@ -59,12 +61,16 @@ export default async function RegulationsPage({
   const summary = data.summary ?? { total_regulations: 0, parsed: 0, total_maps: 0 }
 
   return (
+    <PageTransition>
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Regulations</h1>
-        <p className="text-gray-500 mt-1 text-sm">
-          RBI master directions processed by the compliance agent.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Regulations</h1>
+          <p className="text-gray-500 mt-1 text-sm">
+            RBI master directions processed by the compliance agent.
+          </p>
+        </div>
+        <UploadRegulationButton token={token!} />
       </div>
 
       {/* Summary */}
@@ -176,6 +182,7 @@ export default async function RegulationsPage({
         )}
       </div>
     </div>
+    </PageTransition>
   )
 }
 

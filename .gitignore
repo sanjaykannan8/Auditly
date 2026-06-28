@@ -1,2 +1,4 @@
 .claude/
 ingestion/__pycache__/
+.agents/
+.vscode/

@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 
-from agent.llm_client import invoke_llm, make_llm
+from agent.llm_client import invoke_llm_json, make_llm
 from agent.prompts import VALIDATOR_SYSTEM, VALIDATOR_USER_TMPL
 from agent.state import AgentState
 
@@ -43,21 +42,10 @@ def validator_node(state: AgentState) -> AgentState:
     ]
 
     try:
-        raw = invoke_llm(llm, messages)
+        validation = invoke_llm_json(llm, messages)
     except Exception as exc:
         log.error("[validator] LLM call failed: %s", exc)
         return {**state, "error": f"LLM validation failed: {exc}"}
-
-    # ── Parse JSON ────────────────────────────────────────────────────────
-    try:
-        validation = json.loads(raw.strip())
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if match:
-            validation = json.loads(match.group())
-        else:
-            log.error("[validator] Could not parse JSON:\n%s", raw[:500])
-            return {**state, "error": "JSON parse failed in validator"}
 
     is_valid   = validation.get("is_valid", False)
     confidence = validation.get("confidence_score", 0.0)

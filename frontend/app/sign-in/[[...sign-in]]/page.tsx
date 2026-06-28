@@ -4,7 +4,8 @@ import { useAuth } from '@/lib/auth-client'
 import { Globe } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { CardReveal, PillarReveal } from './_components/SignInAnimations'
 
 const LEFT_PILLARS = [
   { h: '85vh', w: '11vw', l: '-1vw', op: 0.95, z: 10 },
@@ -25,13 +26,13 @@ function CityScapeBackground() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       {LEFT_PILLARS.map((p, i) => (
-        <div key={`l-${i}`} className="absolute bottom-0" style={{ height: p.h, width: p.w, left: p.l, zIndex: p.z }}>
+        <div key={`l-${i}`} data-pillar className="absolute bottom-0" style={{ height: p.h, width: p.w, left: p.l, zIndex: p.z }}>
           <div className="absolute top-0 bottom-0 -left-6 -right-6" style={{ background: '#ff5d03', filter: 'blur(45px)', opacity: p.op * 0.9 }} />
           <div className="absolute inset-0 rounded-t-sm" style={{ background: '#ff5d03', opacity: p.op }} />
         </div>
       ))}
       {RIGHT_PILLARS.map((p, i) => (
-        <div key={`r-${i}`} className="absolute bottom-0" style={{ height: p.h, width: p.w, right: p.r, zIndex: p.z }}>
+        <div key={`r-${i}`} data-pillar className="absolute bottom-0" style={{ height: p.h, width: p.w, right: p.r, zIndex: p.z }}>
           <div className="absolute top-0 bottom-0 -left-6 -right-6" style={{ background: '#ff5d03', filter: 'blur(45px)', opacity: p.op * 0.9 }} />
           <div className="absolute inset-0 rounded-t-sm" style={{ background: '#ff5d03', opacity: p.op }} />
         </div>
@@ -51,6 +52,7 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -73,6 +75,8 @@ export default function SignInPage() {
       style={{ backgroundImage: "url('/bg.svg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}
     >
       <CityScapeBackground />
+      {/* Animate pillars rising on load */}
+      <PillarReveal selector="[data-pillar]" />
 
       <header className="relative z-[100] flex justify-between items-center px-8 py-6 w-full">
         <Link href="/sign-in" className="flex items-center gap-3">
@@ -88,7 +92,9 @@ export default function SignInPage() {
 
       <div className="relative z-[100] flex-1 flex items-center justify-center w-full max-w-[440px] mx-auto px-4 pb-20">
         <div className="w-full">
-          <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-gray-100 px-8 py-9">
+          {/* Animate card in after pillars */}
+          <CardReveal cardRef={cardRef} />
+          <div ref={cardRef} className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-gray-100 px-8 py-9">
             <div className="flex flex-col items-center text-center mb-7">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/dash.png" alt="Auditly" className="w-11 h-11 object-contain mb-4" />

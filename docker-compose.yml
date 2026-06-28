@@ -49,7 +49,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: auditly
       MONGO_INITDB_ROOT_PASSWORD: Mng_Auditly_4Vp6Np1Sd
     ports:
-      - "27017:27017"
+      - "37017:27017"
     volumes:
       - mongodata:/data/db
     healthcheck:

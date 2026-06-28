@@ -10,11 +10,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 
 import httpx
 
-from agent.llm_client import invoke_llm, make_llm
+from agent.llm_client import invoke_llm_json, make_llm
 from agent.prompts import DEPARTMENTS, MAP_USER_TMPL, build_map_system
 from agent.state import AgentState
 
@@ -72,21 +71,10 @@ def map_generator_node(state: AgentState) -> AgentState:
     ]
 
     try:
-        raw = invoke_llm(llm, messages)
+        result = invoke_llm_json(llm, messages)
     except Exception as exc:
         log.error("[map_generator] LLM call failed: %s", exc)
         return {**state, "error": f"LLM MAP generation failed: {exc}"}
-
-    # ── Parse JSON ────────────────────────────────────────────────────────
-    try:
-        result = json.loads(raw.strip())
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if match:
-            result = json.loads(match.group())
-        else:
-            log.error("[map_generator] Could not parse JSON:\n%s", raw[:500])
-            return {**state, "error": "JSON parse failed in map_generator"}
 
     maps            = result.get("maps", [])
     overall_summary = result.get("overall_summary", "")

@@ -2,6 +2,7 @@ import { getServerToken } from '@/lib/auth-server'
 import { PRIORITY_COLOR, STATUS_COLOR, friendlyDate, statusLabel } from '@/lib/labels'
 import Link from 'next/link'
 import MapFilters from './_components/MapFilters'
+import PageTransition from '@/app/_components/PageTransition'
 
 type MapItem = {
   regulation_id: string
@@ -128,6 +129,7 @@ export default async function MapsPage({
   }
 
   return (
+    <PageTransition>
     <div className="p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Action Items</h1>
@@ -274,5 +276,6 @@ export default async function MapsPage({
         </div>
       )}
     </div>
+    </PageTransition>
   )
 }

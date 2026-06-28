@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { gsap } from '@/lib/gsap'
 
 const NAV_ITEMS = [
   { label: 'Home',         href: '/dashboard',             icon: HomeIcon        },
@@ -16,9 +17,38 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const navRef = useRef<HTMLElement>(null)
+
+  // Animate nav items sliding in on first mount
+  useEffect(() => {
+    const el = navRef.current
+    if (!el) return
+    const links = el.querySelectorAll('a')
+    if (!links.length) return
+
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        links,
+        { opacity: 0, x: -16 },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.35,
+          ease: 'power2.out',
+          stagger: 0.05,
+          delay: 0.1,
+          clearProps: 'all',
+        },
+      )
+    }, el)
+
+    return () => ctx.revert()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <aside
+      ref={navRef}
       className="flex flex-col bg-white border-r border-gray-200 flex-shrink-0 transition-all duration-200"
       style={{ width: collapsed ? '64px' : '220px' }}
     >

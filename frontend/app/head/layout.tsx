@@ -1,4 +1,5 @@
 import { getServerToken, getServerUser } from '@/lib/auth-server'
+import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import ProfileMenu from '../_components/ProfileMenu'
 import RealtimeNotifier from '../_components/RealtimeNotifier'
@@ -34,15 +35,19 @@ export default async function HeadLayout({ children }: { children: React.ReactNo
   return (
     <div className="min-h-screen bg-gray-50">
       {status.org_id && <RealtimeNotifier userId={userId} orgId={status.org_id} />}
-      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
-        <div className="flex items-center">
-          <span className="text-xl font-bold text-gray-900 tracking-tight">Auditly</span>
-          <span className="ml-3 text-xs font-medium bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full">
-            Department Head Portal
+
+      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 sticky top-0 z-30">
+        <div className="flex items-center gap-3">
+          <Image src="/dash.png" alt="Auditly" width={28} height={28} className="object-contain" />
+          <span className="text-lg font-bold text-gray-900 tracking-tight">Auditly</span>
+          <div className="w-px h-4 bg-gray-200 mx-1" />
+          <span className="text-xs font-semibold text-[#ff5d03] bg-[#ff5d03]/10 px-2.5 py-1 rounded-full">
+            Department Head
           </span>
         </div>
         <ProfileMenu />
       </header>
+
       <main>{children}</main>
     </div>
   )

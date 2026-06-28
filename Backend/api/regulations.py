@@ -4,17 +4,148 @@ Regulations endpoints — list + detail, combining PostgreSQL tracking + MongoDB
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import uuid
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+import pika
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi import Depends
+from pydantic import BaseModel
 
 from api.deps import get_current_user, require_admin
 from db.mongo import get_db
 from db.postgres import get_pool
+from storage import UPLOAD_DIR, PUBLIC_BASE_URL
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/regulations", tags=["regulations"])
+
+# RabbitMQ publish settings (same as publish_test.py)
+_EXCHANGE    = "regulations"
+_ROUTING_KEY = "regulation.rbi.new"
+
+
+def _publish_to_queue(payload: dict) -> None:
+    """Synchronously publish one message to the regulations exchange."""
+    url = os.environ.get("CLOUDAMQP_URL")
+    if not url:
+        raise RuntimeError("CLOUDAMQP_URL is not set — cannot publish to queue")
+
+    params = pika.URLParameters(url)
+    params.socket_timeout = 10
+    connection = pika.BlockingConnection(params)
+    try:
+        channel = connection.channel()
+        channel.basic_publish(
+            exchange=_EXCHANGE,
+            routing_key=_ROUTING_KEY,
+            body=json.dumps(payload),
+            properties=pika.BasicProperties(
+                delivery_mode=2,
+                content_type="application/json",
+                message_id=payload["direction_id"],
+            ),
+        )
+        log.info("[upload] Published direction_id=%s to queue", payload["direction_id"])
+    finally:
+        connection.close()
+
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/regulations", tags=["regulations"])
+
+
+@router.post("/upload", status_code=201)
+async def upload_regulation(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    direction_id: str = Form(None),
+    user: dict = Depends(require_admin),
+) -> dict:
+    """
+    Upload any regulator PDF directly from the compliance officer UI.
+
+    Steps:
+      1. Save the file to the local uploads/ directory (same store used by proof uploads).
+      2. Insert a 'processing' row in regulations so the dashboard shows it immediately.
+      3. Publish to the RabbitMQ queue — the running consumer picks it up and runs the
+         full LangGraph pipeline, then fans the result back to all orgs via /internal/regulation-done.
+
+    The consumer reads the pdf_url as a local file path (not an HTTP URL), exactly
+    the same way publish_test.py works — it passes the path straight to MarkItDown.
+    """
+    # ── Validate file type ────────────────────────────────────────────────
+    content_type = file.content_type or ""
+    filename     = file.filename or "upload.pdf"
+    if not (
+        content_type == "application/pdf"
+        or filename.lower().endswith(".pdf")
+    ):
+        raise HTTPException(400, "Only PDF files are accepted.")
+
+    # ── Save to uploads/ ──────────────────────────────────────────────────
+    raw  = await file.read()
+    name = f"{uuid.uuid4().hex}.pdf"
+    dest = UPLOAD_DIR / name
+    dest.write_bytes(raw)
+
+    # Public URL (for the UI to link to the original) and local path (for the consumer)
+    public_url = f"{PUBLIC_BASE_URL}/uploads/{name}"
+    local_path = str(dest)          # absolute path on the host — consumer reads this directly
+
+    # ── Resolve direction_id ──────────────────────────────────────────────
+    dir_id = (direction_id or "").strip() or f"UPLOAD-{uuid.uuid4().hex[:8].upper()}"
+
+    # ── Insert regulation row (status = processing) ───────────────────────
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        # Upsert — if re-uploading the same direction_id, refresh the row
+        reg_id = await conn.fetchval(
+            """
+            INSERT INTO regulations (org_id, direction_id, title, pdf_url, source, status)
+            VALUES ($1, $2, $3, $4, 'upload', 'processing')
+            ON CONFLICT (org_id, direction_id) DO UPDATE
+                SET title   = EXCLUDED.title,
+                    pdf_url = EXCLUDED.pdf_url,
+                    status  = 'processing'
+            RETURNING id
+            """,
+            user["org_id"], dir_id, title.strip(), public_url,
+        )
+
+    # ── Publish to queue ──────────────────────────────────────────────────
+    payload = {
+        "direction_id":   dir_id,
+        "title":          title.strip(),
+        "page_url":       None,
+        "pdf_url":        local_path,          # local path — consumer reads directly
+        "published_date": None,
+        "scraped_at":     datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        _publish_to_queue(payload)
+    except Exception as exc:
+        log.error("[upload] Failed to publish to queue: %s", exc)
+        # Don't fail the HTTP request — the row is already in the DB.
+        # The officer can re-upload to retry publishing.
+        return {
+            "regulation_id": str(reg_id),
+            "direction_id":  dir_id,
+            "pdf_url":       public_url,
+            "warning":       f"Saved but could not publish to queue: {exc}",
+        }
+
+    log.info(
+        "[upload] Uploaded regulation org=%s dir=%s file=%s",
+        user["org_id"], dir_id, name,
+    )
+    return {
+        "regulation_id": str(reg_id),
+        "direction_id":  dir_id,
+        "pdf_url":       public_url,
+    }
 
 
 @router.get("")
